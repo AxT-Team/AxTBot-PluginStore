@@ -1,0 +1,27 @@
+# Dependencies
+store/node_modules/
+
+# Build output
+store/dist/
+store/dist-ssr/
+
+# Logs
+store/*.log
+store/dev-server.log
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Env (local overrides only; .env itself is committed as default config)
+store/.env.local
+store/.env.*.local
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Coding Agents
+.codebuddy

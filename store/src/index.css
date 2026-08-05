@@ -1,0 +1,123 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* GLASS Light Mode */
+    --background: 240 44% 98%; /* #f8f8fc */
+    --foreground: 0 0% 4%; /* #0a0a0a */
+    --card: 0 0% 100%; /* #ffffff */
+    --card-foreground: 0 0% 4%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 4%;
+    --primary: 210 100% 50%; /* #0080ff */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 33% 96%;
+    --secondary-foreground: 0 0% 4%;
+    --muted: 240 33% 96%;
+    --muted-foreground: 220 9% 46%; /* #6b7280 */
+    --accent: 214 76% 93%;
+    --accent-foreground: 210 100% 40%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 160 84% 39%; /* #10b981 */
+    --border: 0 0% 0% / 10%; /* rgba(0,0,0,.1) hairline */
+    --input: 0 0% 0% / 10%;
+    --ring: 210 100% 50%;
+    --radius: 0.625rem; /* 10px main radius */
+  }
+
+  .dark {
+    /* GLASS Dark Mode - non-pure-black #0a0a0a */
+    --background: 0 0% 4%; /* #0a0a0a */
+    --foreground: 0 0% 98%; /* #fafafa */
+    --card: 0 0% 9%; /* #161616 */
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 217 91% 60%; /* #3b82f6 */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 12%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 12%;
+    --muted-foreground: 240 5% 65%; /* #a1a1aa */
+    --accent: 217 91% 60% / 15%;
+    --accent-foreground: 217 91% 70%;
+    --destructive: 0 63% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 160 84% 39%;
+    --border: 0 0% 100% / 12%; /* rgba(255,255,255,.12) hairline */
+    --input: 0 0% 100% / 12%;
+    --ring: 217 91% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+@layer components {
+  /* GLASS canvas dot-grid texture */
+  .glass-canvas {
+    position: relative;
+  }
+  .glass-canvas::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image: radial-gradient(circle, currentColor 1px, transparent 1px);
+    background-size: 28px 28px;
+    opacity: 0.07;
+    z-index: 0;
+  }
+  .glass-canvas.dark::before {
+    opacity: 0.09;
+  }
+
+  /* GLASS surface: flat + 1px hairline + zero shadow */
+  .glass-surface {
+    @apply border bg-card text-card-foreground;
+    border-color: hsl(var(--border));
+  }
+
+  /* Focus ring: blue + 3px soft glow */
+  .glass-focus:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 3px hsl(var(--accent)),
+      var(--tw-ring-offset-shadow, 0 0 #0000),
+      var(--tw-ring-shadow, 0 0 #0000);
+  }
+
+  /* Glass badge: 10% tint bg + 35% border + solid text, pill */
+  .glass-chip {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+
+  /* Dialog body scrollbar：细、克制、不抢视觉（GLASS 设计约束） */
+  .dialog-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(127, 127, 127, 0.35) transparent;
+  }
+  .dialog-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+  .dialog-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .dialog-scroll::-webkit-scrollbar-thumb {
+    background-color: rgba(127, 127, 127, 0.35);
+    border-radius: 9999px;
+  }
+  .dialog-scroll::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(127, 127, 127, 0.55);
+  }
+}

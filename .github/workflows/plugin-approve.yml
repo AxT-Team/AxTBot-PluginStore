@@ -1,0 +1,160 @@
+name: manuall-approve
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  review:
+    name: 人工审核
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: 检出仓库代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: 处理 /approve 或 /reject 评论
+        id: cmd
+        env:
+          COMMENT: ${{ github.event.comment.body }}
+        run: |
+          case "$COMMENT" in
+            /approve*)
+              echo "action=approve" >> "$GITHUB_OUTPUT"
+              ;;
+            /reject*)
+              echo "action=reject" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::notice::评论非 /approve 或 /reject，跳过"
+              echo "action=skip" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+      - name: 校验评论者权限
+        if: steps.cmd.outputs.action != 'skip'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          LOGIN: ${{ github.event.comment.user.login }}
+        run: |
+          PERM=$(gh api "/repos/${REPO}/collaborators/${LOGIN}/permission" --jq '.permission' 2>/dev/null || echo "none")
+          echo "permission=$PERM"
+          case "$PERM" in
+            admin|write|maintain)
+              echo "authorized=true" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::error::${LOGIN} 没有权限执行审核（需要 write/maintain/admin）"
+              exit 1
+              ;;
+          esac
+
+      - name: 重新生成元数据并合入 assess
+        id: approve
+        if: steps.cmd.outputs.action == 'approve'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set +e
+          BODY=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json body --jq '.body')
+          printf '%s' "$BODY" | python3 .github/scripts/extract_form.py
+          PYPI_NAME=$(jq -r '.pypi' form.json)
+          REPO_URL=$(jq -r '.repo' form.json)
+          echo "pypi=$PYPI_NAME repo=$REPO_URL"
+
+          if [ -z "$PYPI_NAME" ] || [ -z "$REPO_URL" ]; then
+            echo "::warning::issue 表单缺少 PyPI/仓库信息，跳过元数据合并"
+            echo "merged=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          OWNER_REPO=$(echo "$REPO_URL" | sed -E 's#https?://github.com/##; s#\.git$##')
+          git clone --depth 1 "https://github.com/${OWNER_REPO}.git" plugin_repo 2>&1 | tail -5
+          if [ ! -d plugin_repo ]; then
+            echo "::warning::克隆插件仓库失败，跳过元数据合并"
+            echo "merged=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          PYPI_UNDER=$(echo "$PYPI_NAME" | tr '-' '_')
+          PLUGIN_DIR=$(find plugin_repo -type d -regex ".*/src/${PYPI_UNDER}\$" | head -n1 || true)
+          if [ -z "$PLUGIN_DIR" ]; then
+            PLUGIN_DIR=$(find plugin_repo -type d -regex '.*/src/axtbot_plugin_[^/]+$' | head -n1 || true)
+          fi
+          if [ -z "$PLUGIN_DIR" ] || [ ! -f "$PLUGIN_DIR/__init__.py" ]; then
+            echo "::warning::找不到插件 __init__.py，跳过元数据合并"
+            echo "merged=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          python3 .github/scripts/parse_meta.py "$PLUGIN_DIR/__init__.py" || {
+            echo "::warning::未找到 __meta__，跳过元数据合并"
+            echo "merged=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+          python3 .github/scripts/build_metadata.py || {
+            echo "::warning::合成元数据失败"
+            echo "merged=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+
+          DEST="assess/${PYPI_NAME}.json"
+          cp axtbot-plugin-tmp.json "$DEST"
+          echo "metadata written: $DEST"
+
+          # 更新 index.json：追加插件条目、刷新 count/categories/updated_at
+          PYPI_NAME="$PYPI_NAME" python3 .github/scripts/update_index.py || {
+            echo "::warning::更新 index.json 失败"
+          }
+          echo "merged=true" >> "$GITHUB_OUTPUT"
+
+      - name: 提交并推送 assess 变更
+        if: steps.cmd.outputs.action == 'approve' && steps.approve.outputs.merged == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assess/
+          git diff --cached --quiet || git commit -m "chore(assess): 合并插件 #$ISSUE_NUMBER"
+          git push
+
+      - name: 根据审核结果打标签并关闭 issue
+        if: steps.cmd.outputs.action != 'skip'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ACTION: ${{ steps.cmd.outputs.action }}
+          MERGED: ${{ steps.approve.outputs.merged }}
+        run: |
+          if [ "$ACTION" = "approve" ]; then
+            gh issue edit "$ISSUE_NUMBER" --repo "$REPO" \
+              --add-label "plugin-approved" \
+              --remove-label "awaiting-manual-review,plugin-error,plugin-verified" >/dev/null
+            if [ "$MERGED" = "true" ]; then
+              gh issue close "$ISSUE_NUMBER" --repo "$REPO" \
+                --comment "✅ **已人工审核通过**。元数据已合入 \`assess/\`，感谢贡献！"
+            else
+              gh issue close "$ISSUE_NUMBER" --repo "$REPO" \
+                --comment "✅ **已人工审核通过**。但元数据未能自动生成（表单或插件代码缺失字段），请在关闭前手动补全 \`assess/\` 下的 JSON。"
+            fi
+          else
+            gh issue edit "$ISSUE_NUMBER" --repo "$REPO" \
+              --add-label "plugin-rejected" \
+              --remove-label "awaiting-manual-review,plugin-error,plugin-verified" >/dev/null
+            gh issue close "$ISSUE_NUMBER" --repo "$REPO" \
+              --comment "❌ **已人工审核拒绝**。如有疑问请在 issue 中说明。"
+          fi

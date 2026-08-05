@@ -1,0 +1,87 @@
+# GitHub Issue 模板：插件商店提交
+# 当用户在商店点击「提交插件」时会带 body 来到此模板的预填字段。
+name: 插件申请
+description: 提交新插件到 AxTBot 插件商店
+title: "[插件申请] "
+labels:
+  - plugin-request
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请填写以下信息以提交插件到 AxTBot 插件商店。
+        工作流会在检测到本 Issue 后自动验证插件，成功后打上 `plugin-verified` 标签等待人工合并，
+        失败则会打上 `plugin-error` 标签并附上错误日志。
+        无论成功失败，运行日志都会贴在 issue 评论里，方便你排查与维护者审核。
+
+  - type: input
+    id: plugin-name
+    attributes:
+      label: 插件名称
+      description: 展示在插件商店卡片上的名称。
+      placeholder: 例如：AxTBot Welcome
+    validations:
+      required: true
+
+  - type: input
+    id: pypi-name
+    attributes:
+      label: PyPI 包名
+      description: 在 PyPI 上发布的可 `pip install` 的包名。工作流会通过 pip 安装它来验证插件加载。
+      placeholder: 例如：axtbot-plugin-welcome
+    validations:
+      required: true
+
+  - type: input
+    id: repo-owner
+    attributes:
+      label: GitHub 用户名
+      description: 插件源码仓库所属的 GitHub 用户/组织，同时也是插件作者。商店卡片会展示为指向 https://github.com/<用户名> 的链接。
+      placeholder: 例如：your-name
+    validations:
+      required: true
+
+  - type: input
+    id: repo-name
+    attributes:
+      label: 仓库名
+      description: 插件源码所在的仓库名。工作流会拼接为 `https://github.com/<用户名>/<仓库名>` 拉取代码，并读取 `src/axtbot-plugin-xxxx/__init__.py` 中的 `__meta__` 数据。
+      placeholder: 例如：axtbot-plugin-xxx
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: 插件分类
+      description: 选择最贴近的分类。
+      options:
+        - 工具
+        - 娱乐
+        - 管理
+        - 功能
+        - 社交
+        - 图像
+        - 网络
+        - 其他
+      default: 0
+    validations:
+      required: true
+
+  - type: input
+    id: tags
+    attributes:
+      label: 标签
+      description: 自由标签，多个用英文逗号或空格分隔，例如：`欢迎, 群管理, 模板`。
+      placeholder: 例如：欢迎, 群管理, 模板
+    validations:
+      required: false
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 插件描述
+      description: 简要描述插件的功能、用途与依赖。如 `__meta__` 中已有 `description`，则可与该表单填写的内容合并使用。
+      placeholder: 例如：自动向加入群的新成员发送欢迎消息，支持模板与变量占位符。
+    validations:
+      required: false

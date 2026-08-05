@@ -1,0 +1,298 @@
+# ============================================================
+# 插件提交流程：当一个 issue 被打上 plugin-request 标签后，
+# 自动尝试拉取插件代码、读取 __meta__、合成 assess 元数据 JSON、
+# pip 安装并加载插件验证。
+# 无论验证成功/失败，都会在 issue 评论中输出：
+#   插件元数据 JSON + 错误信息（如有）+ 完整运行日志。
+# 人工审核：维护者评论 /approve 或 /reject 决定是否合并。
+# ============================================================
+
+name: auto-verify
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "关联的插件申请 issue 编号"
+        required: true
+        type: number
+
+concurrency:
+  group: plugin-submission-${{ github.event.issue.number || github.event.inputs.issue_number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  validate:
+    name: 验证插件加载
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issues' &&
+       contains(github.event.issue.labels.*.name, 'plugin-request'))
+
+    steps:
+      - name: 检出仓库代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: 解析 issue 编号
+        id: issue
+        env:
+          EVENT_ISSUE: ${{ github.event.issue.number }}
+          INPUT_ISSUE: ${{ github.event.inputs.issue_number }}
+        run: |
+          if [ -n "$EVENT_ISSUE" ]; then
+            echo "number=$EVENT_ISSUE" >> "$GITHUB_OUTPUT"
+          elif [ -n "$INPUT_ISSUE" ]; then
+            echo "number=$INPUT_ISSUE" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::无法确定 issue 编号"
+            exit 1
+          fi
+
+      - name: 准备日志文件
+        if: always()
+        run: |
+          mkdir -p logs
+          : > logs/full.log
+          : > logs/error.log
+          rm -f logs/meta.json
+
+      - name: 安装系统依赖
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq git jq >/dev/null 2>&1 | tee -a logs/full.log
+          python3 -m pip install --upgrade pip | tee -a logs/full.log
+
+      - name: 提取 issue 表单数据
+        id: form
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
+        run: |
+          set -e
+          BODY=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json body --jq '.body')
+          printf '%s' "$BODY" | python3 .github/scripts/extract_form.py | tee -a logs/full.log
+          cat form.json
+          echo "pypi=$(jq -r '.pypi' form.json)" >> "$GITHUB_OUTPUT"
+          echo "repo=$(jq -r '.repo' form.json)" >> "$GITHUB_OUTPUT"
+          echo "name=$(jq -r '.name' form.json)" >> "$GITHUB_OUTPUT"
+          echo "category=$(jq -r '.category' form.json)" >> "$GITHUB_OUTPUT"
+          echo "author=$(jq -r '.author' form.json)" >> "$GITHUB_OUTPUT"
+          echo "description=$(jq -r '.description' form.json)" >> "$GITHUB_OUTPUT"
+          echo "tags_json=$(jq -c '.tags_list' form.json)" >> "$GITHUB_OUTPUT"
+
+      - name: 克隆插件仓库、解析 __meta__ 并合成元数据
+        id: meta
+        env:
+          REPO_URL: ${{ steps.form.outputs.repo }}
+          PYPI_NAME: ${{ steps.form.outputs.pypi }}
+        run: |
+          set +e
+          if [ -z "$PYPI_NAME" ] || [ -z "$REPO_URL" ]; then
+            echo "表单缺少 PyPI 包名或 GitHub 仓库" >> logs/error.log
+            echo "meta_ok=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          OWNER_REPO=$(echo "$REPO_URL" | sed -E 's#https?://github.com/##; s#\.git$##')
+          echo "::group::克隆插件仓库 ${OWNER_REPO}"
+          git clone --depth 1 "https://github.com/${OWNER_REPO}.git" plugin_repo 2>&1 | tee -a logs/full.log
+          if [ ! -d plugin_repo ]; then
+            echo "克隆仓库失败：${REPO_URL}" >> logs/error.log
+            echo "meta_ok=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "::endgroup::"
+
+          # PyPI 名用连字符，包目录/导入名通常用下划线，两种都要匹配
+          PYPI_UNDER=$(echo "$PYPI_NAME" | tr '-' '_')
+          PLUGIN_DIR=$(find plugin_repo -type d -regex ".*/src/${PYPI_UNDER}\$" | head -n1 || true)
+          if [ -z "$PLUGIN_DIR" ]; then
+            PLUGIN_DIR=$(find plugin_repo -type d -regex ".*/src/${PYPI_NAME}\$" | head -n1 || true)
+          fi
+          if [ -z "$PLUGIN_DIR" ]; then
+            PLUGIN_DIR=$(find plugin_repo -type d -regex '.*/src/axtbot_plugin_[^/]+$' | head -n1 || true)
+          fi
+          if [ -z "$PLUGIN_DIR" ]; then
+            PLUGIN_DIR=$(find plugin_repo -type d -regex '.*/src/axtbot-plugin-[^/]+$' | head -n1 || true)
+          fi
+          if [ -z "$PLUGIN_DIR" ] || [ ! -f "$PLUGIN_DIR/__init__.py" ]; then
+            echo "找不到 src/${PYPI_NAME}/__init__.py" >> logs/error.log
+            echo "meta_ok=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "plugin_dir=$PLUGIN_DIR" >> "$GITHUB_OUTPUT"
+          echo "plugin_import=${PLUGIN_DIR##*/}" >> "$GITHUB_OUTPUT"
+
+          echo "::group::__meta__ 解析"
+          python3 .github/scripts/parse_meta.py "$PLUGIN_DIR/__init__.py" >> logs/full.log 2>&1
+          if [ ! -f meta.json ]; then
+            echo "未在 __init__.py 中找到 __meta__ 字典" >> logs/error.log
+            echo "meta_ok=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "::endgroup::"
+
+          echo "::group::合成元数据 JSON"
+          python3 .github/scripts/build_metadata.py >> logs/full.log 2>&1
+          cp axtbot-plugin-tmp.json logs/meta.json
+          echo "meta_ok=true" >> "$GITHUB_OUTPUT"
+          echo "::endgroup::"
+
+      - name: pip 安装插件包
+        env:
+          PYPI_NAME: ${{ steps.form.outputs.pypi }}
+        run: |
+          echo "::group::pip install"
+          python3 -m pip install "$PYPI_NAME" 2>&1 | tee -a logs/full.log || true
+          echo "::endgroup::"
+
+      - name: 克隆 AxTBot 主仓库并验证加载
+        id: verify
+        env:
+          PYPI_NAME: ${{ steps.form.outputs.pypi }}
+          PLUGIN_DIR: ${{ steps.meta.outputs.plugin_dir }}
+          PLUGIN_IMPORT: ${{ steps.meta.outputs.plugin_import }}
+        run: |
+          set +e
+          echo "::group::git clone AxTBot"
+          git clone --depth 1 https://github.com/AxT-Team/AxTBot.git axtbot 2>&1 | tee -a logs/full.log
+          echo "::endgroup::"
+
+          # 优先使用插件仓库自带的源码；否则已通过 pip 安装
+          if [ -n "$PLUGIN_DIR" ] && [ -d "$PLUGIN_DIR" ]; then
+            REL_DIR="${PLUGIN_DIR#plugin_repo/}"
+            mkdir -p "axtbot/$(dirname "$REL_DIR")"
+            cp -r "$PLUGIN_DIR" "axtbot/$REL_DIR" 2>&1 | tee -a logs/full.log
+          fi
+
+          cd axtbot
+          python3 -m pip install --quiet -e . 2>&1 | tee -a ../logs/full.log
+          echo "::group::尝试 import 插件包并校验 __meta__"
+          PKG="${PLUGIN_IMPORT:-$PYPI_NAME}" python3 ../.github/scripts/verify_plugin.py 2>&1 | tee -a ../logs/full.log
+          cd ..
+          echo "::endgroup::"
+
+          if [ -f axtbot/verify.json ]; then
+            VERIFY_OK=$(jq -r '.ok' axtbot/verify.json)
+            echo "ok=$VERIFY_OK" >> "$GITHUB_OUTPUT"
+            if [ "$VERIFY_OK" != "true" ]; then
+              jq -r '.error' axtbot/verify.json >> logs/error.log
+            fi
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "验证脚本未产出 verify.json" >> logs/error.log
+          fi
+
+      - name: 上传运行日志
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-submission-log-${{ steps.issue.outputs.number }}
+          path: logs/
+
+      - name: 打标签并输出完整评论
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
+          VERIFY_OK: ${{ steps.verify.outputs.ok }}
+          META_OK: ${{ steps.meta.outputs.meta_ok }}
+        run: |
+          set +e
+          OK_FLAG="${VERIFY_OK:-false}"
+
+          # 若 parse_meta 失败，则从表单生成部分元数据，确保评论中总是有元数据
+          if [ ! -f logs/meta.json ]; then
+            META_OK="${META_OK:-false}"
+            if [ "$META_OK" != "true" ]; then
+              python3 .github/scripts/build_form_fallback.py
+            fi
+          fi
+
+          # 清理上一次验证标签
+          gh issue edit "$ISSUE_NUMBER" --repo "$REPO" \
+            --remove-label "plugin-verified,plugin-error,awaiting-manual-review" \
+            >/dev/null 2>&1 || true
+
+          if [ "$OK_FLAG" = "true" ]; then
+            gh issue edit "$ISSUE_NUMBER" --repo "$REPO" \
+              --add-label "plugin-verified,awaiting-manual-review" >/dev/null
+            STATUS="✅"
+            TITLE="【自动】插件验证通过"
+          else
+            gh issue edit "$ISSUE_NUMBER" --repo "$REPO" \
+              --add-label "plugin-error" >/dev/null
+            STATUS="❌"
+            TITLE="【自动】插件验证失败"
+          fi
+
+          # 使用 jq 将元数据转成 markdown 表格（若字段缺失则跳过）
+          META_TABLE=$(
+            jq -r '
+              def esc: gsub("[|]"; "\\|");
+              ["元数据", "数据值"] as $h |
+              (["name", "版本", "作者", "描述", "分类", "标签", "PyPI", "仓库"] | length) as $n |
+              [
+                (["**字段**", "**值**"]),
+                (["---", "---"]),
+                (if .name then ["名称", (.name|esc)] else empty end),
+                (if .version then ["版本", (.version|esc)] else empty end),
+                (if .author then ["作者", (.author|esc)] else empty end),
+                (if .description then ["描述", (.description|esc)] else empty end),
+                (if .category then ["分类", (.category|esc)] else empty end),
+                (if (.tags|length)>0 then ["标签", (.tags|join(", ")|esc)] else empty end),
+                (if .pypi then ["PyPI", (.pypi|esc)] else empty end),
+                (if .repo then ["仓库", (.repo|esc)] else empty end)
+              ] | map(join(" | ")) | join("\n")
+            ' logs/meta.json 2>/dev/null || echo "（无元数据）"
+          )
+
+          {
+            echo "$STATUS **$TITLE**"
+            echo
+            echo "---"
+            echo
+            echo "## 📦 插件元数据"
+            echo
+            echo "$META_TABLE"
+            echo
+            if [ "$OK_FLAG" != "true" ] && [ -s logs/error.log ]; then
+              echo "---"
+              echo
+              echo "## ❌ 错误信息（Traceback）"
+              echo
+              echo '```text'
+              sed -n '1,300p' logs/error.log
+              echo '```'
+              echo
+            fi
+            echo "---"
+            echo
+            echo "## 📋 完整运行日志"
+            echo
+            echo '<details><summary>点击展开完整日志</summary>'
+            echo
+            echo '```text'
+            sed -n '1,600p' logs/full.log
+            echo '```'
+            echo
+            echo '</details>'
+            echo
+            echo "---"
+            echo
+            echo "🟡 **等待人工审核**：维护者将通过评论 \`/approve\`（批准合并）或 \`/reject\`（拒绝）。"
+          } > comment.md
+
+          gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body-file comment.md
