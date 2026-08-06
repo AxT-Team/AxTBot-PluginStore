@@ -1,0 +1,16 @@
+{
+  "name": "状态信息",
+  "version": "1.0.1",
+  "author": "AxT-Team",
+  "description": "该插件为官方插件包之一，通过'/atinfo' 获取当前机器人的在线时间、群聊/私聊收发消息数",
+  "pypi": "axtbot-plugin-atinfo",
+  "pypi_url": "https://pypi.org/project/axtbot-plugin-atinfo/",
+  "official": true,
+  "category": "工具",
+  "tags": [
+    "状态"
+  ],
+  "homepage": "https://github.com/AxT-Team/axtbot-plugin-atinfo",
+  "repo": "https://github.com/AxT-Team/axtbot-plugin-atinfo",
+  "updated_at": "2026-08-06T14:48:46Z"
+}

@@ -1,6 +1,6 @@
 {
-  "count": 0,
-  "updated_at": "2026-08-05T11:47:18Z",
+  "count": 1,
+  "updated_at": "2026-08-06T14:48:46Z",
   "categories": [
     "工具",
     "娱乐",
@@ -12,5 +12,8 @@
     "其他"
   ],
   "plugins": [
+    {
+      "file": "axtbot-plugin-atinfo.json"
+    }
   ]
 }
