@@ -1,0 +1,16 @@
+{
+  "name": "答案之书",
+  "version": "1.0.0",
+  "author": "AxT-Team",
+  "description": "该插件为官方插件包之一，通过'/ask' 得到你想要的答案！",
+  "pypi": "axtbot-plugin-cyberbook",
+  "pypi_url": "https://pypi.org/project/axtbot-plugin-cyberbook/",
+  "official": true,
+  "category": "娱乐",
+  "tags": [
+    "答案之书"
+  ],
+  "homepage": "https://github.com/AxT-Team/axtbot-plugin-cyberbook",
+  "repo": "https://github.com/AxT-Team/axtbot-plugin-cyberbook",
+  "updated_at": "2026-08-07T16:23:23Z"
+}
