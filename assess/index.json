@@ -1,6 +1,6 @@
 {
-  "count": 2,
-  "updated_at": "2026-08-07T16:23:23Z",
+  "count": 3,
+  "updated_at": "2026-08-09T04:35:05Z",
   "categories": [
     "工具",
     "娱乐",
@@ -17,6 +17,9 @@
     },
     {
       "file": "axtbot-plugin-cyberbook.json"
+    },
+    {
+      "file": "axtbot-plugin-hotlist.json"
     }
   ]
 }

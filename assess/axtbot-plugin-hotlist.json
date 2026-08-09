@@ -1,0 +1,16 @@
+{
+  "name": "今日热榜",
+  "version": "1.0.0",
+  "author": "AxT-Team",
+  "description": "该插件为官方插件包之一，通过'/hotlist'获取今天所发生的事！",
+  "pypi": "axtbot-plugin-hotlist",
+  "pypi_url": "https://pypi.org/project/axtbot-plugin-hotlist/",
+  "official": true,
+  "category": "工具",
+  "tags": [
+    "热榜"
+  ],
+  "homepage": "https://github.com/AxT-Team/axtbot-plugin-hotlist",
+  "repo": "https://github.com/AxT-Team/axtbot-plugin-hotlist",
+  "updated_at": "2026-08-09T04:35:05Z"
+}
