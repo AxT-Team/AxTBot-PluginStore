@@ -353,6 +353,7 @@ jobs:
           VERIFY_OK: ${{ steps.verify.outputs.ok }}
           REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
+          AUTHOR: ${{ steps.form.outputs.author }}
         run: |
           set +e
           OK_FLAG="${VERIFY_OK:-false}"
@@ -371,6 +372,7 @@ jobs:
             --arg dt "$DETAIL" \
             --arg py "$PYPI" \
             --arg nm "$NAME" \
+            --arg au "${AUTHOR:-}" \
             --arg url "$ISSUE_URL" \
-            '{event:$ev,source:"plugin-store",detail:$dt,plugin:{name:$nm,pypi:$py},issue:$url}')
+            '{event:$ev,source:"plugin-store",detail:$dt,plugin:{name:$nm,pypi:$py,author:$au},issue:$url}')
           NOTIFY_JSON="$NOTIFY_JSON" python3 .github/scripts/notify_webhook.py
