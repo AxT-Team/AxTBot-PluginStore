@@ -228,14 +228,16 @@ jobs:
 
           if [ "$OK_FLAG" = "true" ]; then
             gh issue edit "$ISSUE_NUMBER" --repo "$REPO" \
-              --add-label "plugin-verified,awaiting-manual-review" >/dev/null
+              --add-label "plugin-verified" >/dev/null
             STATUS="✅"
             TITLE="【自动】插件验证通过"
+            REVIEW_NOTE="✅ 验证通过，将自动审批并合入商店。"
           else
             gh issue edit "$ISSUE_NUMBER" --repo "$REPO" \
-              --add-label "plugin-error" >/dev/null
+              --add-label "plugin-error,awaiting-manual-review" >/dev/null
             STATUS="❌"
             TITLE="【自动】插件验证失败"
+            REVIEW_NOTE="🟡 **等待人工审核**：维护者将通过评论 \`/approve\`（批准合并）或 \`/reject\`（拒绝）。"
           fi
 
           # 使用 jq 将元数据转成 markdown 表格（若字段缺失则跳过）
@@ -292,7 +294,83 @@ jobs:
             echo
             echo "---"
             echo
-            echo "🟡 **等待人工审核**：维护者将通过评论 \`/approve\`（批准合并）或 \`/reject\`（拒绝）。"
+            echo "$REVIEW_NOTE"
           } > comment.md
 
           gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body-file comment.md
+
+      - name: 自动审批并合入 assess
+        if: steps.verify.outputs.ok == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
+        run: |
+          set +e
+          PYPI_NAME=$(jq -r '.pypi' form.json 2>/dev/null || echo "")
+          if [ -z "$PYPI_NAME" ]; then
+            echo "::warning::缺少 PyPI 包名，跳过自动审批"
+            exit 0
+          fi
+
+          # 复用验证步骤已合成的元数据；缺失时重新构建
+          if [ ! -f axtbot-plugin-tmp.json ]; then
+            REPO_URL=$(jq -r '.repo' form.json)
+            OWNER_REPO=$(echo "$REPO_URL" | sed -E 's#https?://github.com/##; s#\.git$##')
+            git clone --depth 1 "https://github.com/${OWNER_REPO}.git" plugin_repo >/dev/null 2>&1 || exit 0
+            PYPI_UNDER=$(echo "$PYPI_NAME" | tr '-' '_')
+            PLUGIN_DIR=$(find plugin_repo -type d -regex ".*/src/${PYPI_UNDER}\$" | head -n1 || true)
+            if [ -z "$PLUGIN_DIR" ]; then
+              PLUGIN_DIR=$(find plugin_repo -type d -regex '.*/src/axtbot_plugin_[^/]+$' | head -n1 || true)
+            fi
+            [ -f "$PLUGIN_DIR/__init__.py" ] || exit 0
+            python3 .github/scripts/parse_meta.py "$PLUGIN_DIR/__init__.py" >/dev/null 2>&1 || exit 0
+            python3 .github/scripts/build_metadata.py >/dev/null 2>&1 || exit 0
+          fi
+
+          cp axtbot-plugin-tmp.json "assess/${PYPI_NAME}.json"
+          PYPI_NAME="$PYPI_NAME" python3 .github/scripts/update_index.py >/dev/null 2>&1 || true
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assess/
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(assess): 自动合并插件 #${ISSUE_NUMBER}"
+            git push
+          fi
+
+          gh issue edit "$ISSUE_NUMBER" --repo "$REPO" \
+            --add-label "plugin-approved" \
+            --remove-label "awaiting-manual-review,plugin-error,plugin-verified" >/dev/null 2>&1 || true
+          gh issue close "$ISSUE_NUMBER" --repo "$REPO" \
+            --comment "🤖 **自动验证通过，已自动审批**。元数据已合入 \`assess/\`。" >/dev/null 2>&1 || true
+
+      - name: 推送结果到 Webhook
+        if: always()
+        env:
+          NOTIFY_WEBHOOK_URL: ${{ secrets.AUTO_REVIEW_WEBHOOK_URL }}
+          NOTIFY_WEBHOOK_TOKEN: ${{ secrets.AUTO_REVIEW_WEBHOOK_TOKEN }}
+          VERIFY_OK: ${{ steps.verify.outputs.ok }}
+          REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
+        run: |
+          set +e
+          OK_FLAG="${VERIFY_OK:-false}"
+          PYPI=$(jq -r '.pypi' form.json 2>/dev/null || echo "")
+          NAME=$(jq -r '.name' form.json 2>/dev/null || echo "")
+          ISSUE_URL="https://github.com/${REPO}/issues/${ISSUE_NUMBER}"
+          if [ "$OK_FLAG" = "true" ]; then
+            EVENT="plugin_approved"
+            DETAIL="自动验证通过，已自动审批并合入商店"
+          else
+            EVENT="plugin_review_required"
+            DETAIL="自动验证失败，需要人工审批"
+          fi
+          NOTIFY_JSON=$(jq -nc \
+            --arg ev "$EVENT" \
+            --arg dt "$DETAIL" \
+            --arg py "$PYPI" \
+            --arg nm "$NAME" \
+            --arg url "$ISSUE_URL" \
+            '{event:$ev,source:"plugin-store",detail:$dt,plugin:{name:$nm,pypi:$py},issue:$url}')
+          NOTIFY_JSON="$NOTIFY_JSON" python3 .github/scripts/notify_webhook.py
