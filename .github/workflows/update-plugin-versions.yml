@@ -1,0 +1,141 @@
+# ============================================================
+# 每日插件版本检查：拉取所有已录入插件的 PyPI 最新版本，
+# 存在新版本时复用与 plugin-submission.yml 相同的验证逻辑重新验证，
+# 验证通过后更新 assess 元数据并推送。
+# ============================================================
+
+name: update-plugin-versions
+
+on:
+  schedule:
+    # 每天 UTC 02:00（北京时间 10:00）
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    name: 检查并更新插件版本
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: 检出仓库代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: 安装依赖
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq jq >/dev/null 2>&1
+          python3 -m pip install --upgrade pip >/dev/null 2>&1
+
+      - name: 检查 PyPI 新版本
+        id: check
+        run: |
+          python3 .github/scripts/check_pypi_updates.py > updates.json
+          echo "count=$(jq 'length' updates.json)" >> "$GITHUB_OUTPUT"
+          jq -r '.[] | "\(.pypi): \(.current_version) -> \(.latest_version)"' updates.json || true
+
+      - name: 重新验证并更新版本
+        id: update
+        if: steps.check.outputs.count != '0'
+        run: |
+          set +e
+          UPDATED=0
+          for entry in $(jq -c '.[]' updates.json); do
+            PYPI=$(echo "$entry" | jq -r '.pypi')
+            REPO=$(echo "$entry" | jq -r '.repo')
+            CUR=$(echo "$entry" | jq -r '.current_version')
+            LATEST=$(echo "$entry" | jq -r '.latest_version')
+            echo "===== 处理 ${PYPI}: ${CUR} -> ${LATEST} ====="
+
+            if [ -z "$REPO" ]; then
+              echo "[skip] ${PYPI}: 缺少仓库地址"
+              continue
+            fi
+
+            # 克隆插件仓库（与提交流程一致）
+            git clone --depth 1 "${REPO}.git" plugin_repo 2>&1 | tail -3
+            if [ ! -d plugin_repo ]; then
+              echo "[skip] ${PYPI}: 克隆仓库失败"
+              continue
+            fi
+
+            # 定位插件源码目录
+            PYPI_UNDER=$(echo "$PYPI" | tr '-' '_')
+            PLUGIN_DIR=$(find plugin_repo -type d -regex ".*/src/${PYPI_UNDER}\$" | head -n1 || true)
+            if [ -z "$PLUGIN_DIR" ]; then
+              PLUGIN_DIR=$(find plugin_repo -type d -regex '.*/src/axtbot_plugin_[^/]+$' | head -n1 || true)
+            fi
+            if [ -z "$PLUGIN_DIR" ] || [ ! -f "$PLUGIN_DIR/__init__.py" ]; then
+              echo "[skip] ${PYPI}: 找不到 src/.../__init__.py"
+              rm -rf plugin_repo
+              continue
+            fi
+
+            # 解析最新 __meta__
+            python3 .github/scripts/parse_meta.py "$PLUGIN_DIR/__init__.py" 2>&1 | tail -3
+            if [ ! -f meta.json ]; then
+              echo "[skip] ${PYPI}: __meta__ 解析失败"
+              rm -rf plugin_repo
+              continue
+            fi
+
+            # pip 安装最新版
+            python3 -m pip install --quiet "$PYPI" 2>&1 | tail -3
+
+            # 克隆 AxTBot 主仓库并验证加载
+            rm -rf axtbot
+            git clone --depth 1 https://github.com/AxT-Team/AxTBot.git axtbot 2>&1 | tail -3
+            REL_DIR="${PLUGIN_DIR#plugin_repo/}"
+            mkdir -p "axtbot/$(dirname "$REL_DIR")"
+            cp -r "$PLUGIN_DIR" "axtbot/$REL_DIR"
+            cd axtbot
+            python3 -m pip install --quiet -e . 2>&1 | tail -3
+            PKG="${PLUGIN_DIR##*/}" python3 ../.github/scripts/verify_plugin.py 2>&1 | tail -3
+            cd ..
+
+            VERIFY_OK="false"
+            if [ -f axtbot/verify.json ]; then
+              VERIFY_OK=$(jq -r '.ok' axtbot/verify.json)
+            fi
+            if [ "$VERIFY_OK" != "true" ]; then
+              echo "[skip] ${PYPI}: 验证失败，跳过更新"
+              rm -rf plugin_repo axtbot meta.json form.json
+              continue
+            fi
+
+            # 构造表单并合成新元数据
+            PYPI_NAME="$PYPI" python3 .github/scripts/build_form_for_update.py
+            python3 .github/scripts/build_metadata.py
+            if [ ! -f axtbot-plugin-tmp.json ]; then
+              echo "[skip] ${PYPI}: 合成元数据失败"
+              rm -rf plugin_repo axtbot meta.json form.json
+              continue
+            fi
+
+            # 版本号以 PyPI 最新版为准
+            jq --arg v "$LATEST" '.version = $v' axtbot-plugin-tmp.json > tmp.json \
+              && mv tmp.json axtbot-plugin-tmp.json
+
+            cp axtbot-plugin-tmp.json "assess/${PYPI}.json"
+            PYPI_NAME="$PYPI" python3 .github/scripts/update_index.py >/dev/null 2>&1 || true
+            echo "[ok] ${PYPI} 已更新到 ${LATEST}"
+            UPDATED=1
+
+            rm -rf plugin_repo axtbot meta.json form.json axtbot-plugin-tmp.json
+          done
+
+          echo "updated=$UPDATED" >> "$GITHUB_OUTPUT"
+
+      - name: 提交并推送版本更新
+        if: steps.update.outputs.updated == '1'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assess/
+          git diff --cached --quiet || git commit -m "chore(assess): 自动更新插件版本"
+          git push
