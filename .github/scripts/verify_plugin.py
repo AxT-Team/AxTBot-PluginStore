@@ -11,6 +11,13 @@ import traceback
 sys.path.insert(0, os.getcwd())
 sys.path.insert(0, os.path.join(os.getcwd(), "src"))
 
+# 导入 app 框架前提供占位配置：仅用于通过框架的配置校验，
+# 不会发起真实网络请求（AccessToken 拉取在后台守护线程中执行）。
+os.environ.setdefault("APPID", "00000000000000000000000000000000")
+os.environ.setdefault("FRAMEWORK_APPID", os.environ.get("APPID", ""))
+os.environ.setdefault("BOT_SECRET", "00000000000000000000000000000000")
+os.environ.setdefault("FRAMEWORK_BOT_SECRET", os.environ.get("BOT_SECRET", ""))
+
 pkg = os.environ.get("PKG", "")
 ok = False
 err = ""
