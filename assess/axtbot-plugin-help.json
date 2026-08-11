@@ -1,0 +1,16 @@
+{
+  "name": "帮助菜单",
+  "version": "1.0.1",
+  "author": "AxT-Team",
+  "description": "该插件为官方插件包之一，通过`/help`提供帮助菜单",
+  "pypi": "axtbot-plugin-help",
+  "pypi_url": "https://pypi.org/project/axtbot-plugin-help/",
+  "official": true,
+  "category": "工具",
+  "tags": [
+    "帮助"
+  ],
+  "homepage": "https://github.com/AxT-Team/axtbot-plugin-help",
+  "repo": "https://github.com/AxT-Team/axtbot-plugin-help",
+  "updated_at": "2026-08-11T06:59:02Z"
+}
