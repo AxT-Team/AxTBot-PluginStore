@@ -5,7 +5,7 @@
   "description": "该插件为官方插件包之一，通过`/help`提供帮助菜单",
   "pypi": "axtbot-plugin-help",
   "pypi_url": "https://pypi.org/project/axtbot-plugin-help/",
-  "official": false,
+  "official": true,
   "category": "工具",
   "tags": [
     "帮助"
