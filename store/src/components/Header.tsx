@@ -51,7 +51,7 @@ export function Header({
         {/* Actions */}
         <div className="flex shrink-0 items-center gap-2">
           <a
-            href="https://docs.axtn.net/axtbot/v2.1.1/guide/intro.html"
+            href="https://docs.axtn.net/axtbot/v2.2/guide/intro.html"
             target="_blank"
             rel="noreferrer"
             className="hidden h-9 items-center gap-1.5 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:inline-flex"
