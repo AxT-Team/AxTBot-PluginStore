@@ -2,7 +2,9 @@
 """对比 assess 中各插件当前版本与 PyPI 最新版本，输出需要更新的插件清单。
 
 用法：python3 check_pypi_updates.py
-输出：JSON 数组，每项含 pypi / repo / current_version / latest_version
+输出：
+  stdout  -> updates.json 内容（JSON 数组），每项含 pypi / repo / current_version / latest_version
+  failures.json -> 查询 PyPI 失败的插件清单（JSON 数组），每项含 pypi / current_version
 """
 import glob
 import json
@@ -19,6 +21,7 @@ def fetch_json(url):
 
 
 updates = []
+failures = []
 for path in sorted(glob.glob("assess/*.json")):
     if path.endswith("index.json"):
         continue
@@ -34,7 +37,14 @@ for path in sorted(glob.glob("assess/*.json")):
         data = fetch_json(f"https://pypi.org/pypi/{pypi}/json")
         latest = data["info"]["version"]
     except Exception as e:
-        print(f"[skip] {pypi}: 无法查询 PyPI ({e})", file=sys.stderr)
+        print(f"[fail] {pypi}: 无法查询 PyPI ({e})", file=sys.stderr)
+        failures.append(
+            {
+                "pypi": pypi,
+                "current_version": current,
+                "error": str(e),
+            }
+        )
         continue
     if latest != current:
         updates.append(
@@ -46,5 +56,8 @@ for path in sorted(glob.glob("assess/*.json")):
             }
         )
         print(f"[update] {pypi}: {current} -> {latest}", file=sys.stderr)
+
+with open("failures.json", "w", encoding="utf-8") as f:
+    json.dump(failures, f, ensure_ascii=False, indent=2)
 
 print(json.dumps(updates, ensure_ascii=False, indent=2))
