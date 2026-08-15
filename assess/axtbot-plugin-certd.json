@@ -1,6 +1,6 @@
 {
   "name": "Certd通知服务",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "Shanshui2024",
   "description": "【AI插件】该插件接收 Certd 自定义 webhook 推送，把证书通知转发到指定 QQ 群",
   "pypi": "axtbot-plugin-certd",
@@ -13,5 +13,5 @@
   ],
   "homepage": "https://github.com/Shanshui2024/axtbot-plugin-certd",
   "repo": "https://github.com/Shanshui2024/axtbot-plugin-certd",
-  "updated_at": "2026-08-15T12:12:43Z"
+  "updated_at": "2026-08-15T12:16:37Z"
 }
