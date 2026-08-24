@@ -178,6 +178,14 @@ jobs:
             PYPI_QUERY_FAILED=$(jq -c '[.[] | {pypi, current: .current_version, latest: "?"}]' failures.json)
             FAILED_JSON=$(jq -nc --argjson a "$FAILED_JSON" --argjson b "$PYPI_QUERY_FAILED" '$a + $b')
           fi
+          # 无任何更新与失败时不推送，避免每日空消息
+          UP_COUNT=$(jq 'length' <<<"$UPDATED_JSON")
+          FD_COUNT=$(jq 'length' <<<"$FAILED_JSON")
+          echo "updated=${UP_COUNT} failed=${FD_COUNT}"
+          if [ "$UP_COUNT" = "0" ] && [ "$FD_COUNT" = "0" ]; then
+            echo "插件无更新且无失败，跳过 Webhook 推送"
+            exit 0
+          fi
           NOTIFY_JSON=$(jq -nc \
             --arg ev "plugin_version_check" \
             --arg src "plugin-store" \

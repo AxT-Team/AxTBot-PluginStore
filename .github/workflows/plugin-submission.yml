@@ -84,13 +84,22 @@ jobs:
           BODY=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json body --jq '.body')
           printf '%s' "$BODY" | python3 .github/scripts/extract_form.py | tee -a logs/full.log
           cat form.json
-          echo "pypi=$(jq -r '.pypi' form.json)" >> "$GITHUB_OUTPUT"
-          echo "repo=$(jq -r '.repo' form.json)" >> "$GITHUB_OUTPUT"
-          echo "name=$(jq -r '.name' form.json)" >> "$GITHUB_OUTPUT"
-          echo "category=$(jq -r '.category' form.json)" >> "$GITHUB_OUTPUT"
-          echo "author=$(jq -r '.author' form.json)" >> "$GITHUB_OUTPUT"
-          echo "description=$(jq -r '.description' form.json)" >> "$GITHUB_OUTPUT"
-          echo "tags_json=$(jq -c '.tags_list' form.json)" >> "$GITHUB_OUTPUT"
+          # 多行值必须用分隔符语法写入 GITHUB_OUTPUT，否则 runner 报 Invalid format
+          {
+            echo "pypi=$(jq -r '.pypi // ""' form.json)"
+            echo "repo=$(jq -r '.repo // ""' form.json)"
+            echo "author=$(jq -r '.author // ""' form.json)"
+            echo "tags_json=$(jq -c '.tags_list' form.json)"
+            echo "name<<FORM_NAME_EOF"
+            jq -r '.name // ""' form.json
+            echo "FORM_NAME_EOF"
+            echo "category<<FORM_CATEGORY_EOF"
+            jq -r '.category // ""' form.json
+            echo "FORM_CATEGORY_EOF"
+            echo "description<<FORM_DESC_EOF"
+            jq -r '.description // ""' form.json
+            echo "FORM_DESC_EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: 克隆插件仓库、解析 __meta__ 并合成元数据
         id: meta
