@@ -1,0 +1,16 @@
+{
+  "name": "今日人品",
+  "version": "1.0.0",
+  "author": "AxT-Team",
+  "description": "该插件为官方插件包之一，通过'/jrrp' 查询今日的人品！\nemm....这只是娱乐的...对吧...",
+  "pypi": "axtbot-plugin-jrrp",
+  "pypi_url": "https://pypi.org/project/axtbot-plugin-jrrp/",
+  "official": true,
+  "category": "娱乐",
+  "tags": [
+    "今日人品"
+  ],
+  "homepage": "https://github.com/AxT-Team/axtbot-plugin-jrrp",
+  "repo": "https://github.com/AxT-Team/axtbot-plugin-jrrp",
+  "updated_at": "2026-08-24T10:10:03Z"
+}

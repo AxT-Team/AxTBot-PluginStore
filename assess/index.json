@@ -1,6 +1,6 @@
 {
-  "count": 6,
-  "updated_at": "2026-08-15T12:16:37Z",
+  "count": 7,
+  "updated_at": "2026-08-24T10:10:26Z",
   "categories": [
     "工具",
     "娱乐",
@@ -29,6 +29,9 @@
     },
     {
       "file": "axtbot-plugin-certd.json"
+    },
+    {
+      "file": "axtbot-plugin-jrrp.json"
     }
   ]
 }
