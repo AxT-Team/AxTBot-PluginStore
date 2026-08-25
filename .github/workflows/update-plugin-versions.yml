@@ -57,8 +57,8 @@ jobs:
 
             if [ -z "$REPO" ]; then
               echo "[skip] ${PYPI}: 缺少仓库地址"
-              jq --arg p "$PYPI" --arg c "$CUR" --arg l "$LATEST" \
-                '. += [{pypi:$p, current:$c, latest:$l}]' failed.json > tmp_failed.json && mv tmp_failed.json failed.json
+              jq --arg p "$PYPI" --arg c "$CUR" --arg l "$LATEST" --arg r "缺少仓库地址" \
+                '. += [{pypi:$p, current:$c, latest:$l, reason:$r}]' failed.json > tmp_failed.json && mv tmp_failed.json failed.json
               continue
             fi
 
@@ -66,8 +66,8 @@ jobs:
             git clone --depth 1 "${REPO}.git" plugin_repo 2>&1 | tail -3
             if [ ! -d plugin_repo ]; then
               echo "[skip] ${PYPI}: 克隆仓库失败"
-              jq --arg p "$PYPI" --arg c "$CUR" --arg l "$LATEST" \
-                '. += [{pypi:$p, current:$c, latest:$l}]' failed.json > tmp_failed.json && mv tmp_failed.json failed.json
+              jq --arg p "$PYPI" --arg c "$CUR" --arg l "$LATEST" --arg r "克隆仓库失败" \
+                '. += [{pypi:$p, current:$c, latest:$l, reason:$r}]' failed.json > tmp_failed.json && mv tmp_failed.json failed.json
               continue
             fi
 
@@ -79,8 +79,8 @@ jobs:
             fi
             if [ -z "$PLUGIN_DIR" ] || [ ! -f "$PLUGIN_DIR/__init__.py" ]; then
               echo "[skip] ${PYPI}: 找不到 src/.../__init__.py"
-              jq --arg p "$PYPI" --arg c "$CUR" --arg l "$LATEST" \
-                '. += [{pypi:$p, current:$c, latest:$l}]' failed.json > tmp_failed.json && mv tmp_failed.json failed.json
+              jq --arg p "$PYPI" --arg c "$CUR" --arg l "$LATEST" --arg r "找不到插件源码目录" \
+                '. += [{pypi:$p, current:$c, latest:$l, reason:$r}]' failed.json > tmp_failed.json && mv tmp_failed.json failed.json
               rm -rf plugin_repo
               continue
             fi
@@ -89,8 +89,8 @@ jobs:
             python3 .github/scripts/parse_meta.py "$PLUGIN_DIR/__init__.py" 2>&1 | tail -3
             if [ ! -f meta.json ]; then
               echo "[skip] ${PYPI}: __meta__ 解析失败"
-              jq --arg p "$PYPI" --arg c "$CUR" --arg l "$LATEST" \
-                '. += [{pypi:$p, current:$c, latest:$l}]' failed.json > tmp_failed.json && mv tmp_failed.json failed.json
+              jq --arg p "$PYPI" --arg c "$CUR" --arg l "$LATEST" --arg r "__meta__ 解析失败" \
+                '. += [{pypi:$p, current:$c, latest:$l, reason:$r}]' failed.json > tmp_failed.json && mv tmp_failed.json failed.json
               rm -rf plugin_repo
               continue
             fi
@@ -115,8 +115,13 @@ jobs:
             fi
             if [ "$VERIFY_OK" != "true" ]; then
               echo "[skip] ${PYPI}: 验证失败，跳过更新"
-              jq --arg p "$PYPI" --arg c "$CUR" --arg l "$LATEST" \
-                '. += [{pypi:$p, current:$c, latest:$l}]' failed.json > tmp_failed.json && mv tmp_failed.json failed.json
+              # 摘取验证错误日志末尾，供 Webhook 通知展示
+              VERR=""
+              if [ -f axtbot/verify.json ]; then
+                VERR=$(jq -r '.error // ""' axtbot/verify.json | python3 -c "import sys;print(sys.stdin.read()[-800:].strip())")
+              fi
+              jq --arg p "$PYPI" --arg c "$CUR" --arg l "$LATEST" --arg r "加载验证失败" --arg e "$VERR" \
+                '. += [{pypi:$p, current:$c, latest:$l, reason:$r, error:$e}]' failed.json > tmp_failed.json && mv tmp_failed.json failed.json
               rm -rf plugin_repo axtbot meta.json form.json
               continue
             fi
@@ -126,8 +131,8 @@ jobs:
             python3 .github/scripts/build_metadata.py
             if [ ! -f axtbot-plugin-tmp.json ]; then
               echo "[skip] ${PYPI}: 合成元数据失败"
-              jq --arg p "$PYPI" --arg c "$CUR" --arg l "$LATEST" \
-                '. += [{pypi:$p, current:$c, latest:$l}]' failed.json > tmp_failed.json && mv tmp_failed.json failed.json
+              jq --arg p "$PYPI" --arg c "$CUR" --arg l "$LATEST" --arg r "合成元数据失败" \
+                '. += [{pypi:$p, current:$c, latest:$l, reason:$r}]' failed.json > tmp_failed.json && mv tmp_failed.json failed.json
               rm -rf plugin_repo axtbot meta.json form.json
               continue
             fi
@@ -162,6 +167,7 @@ jobs:
         env:
           NOTIFY_WEBHOOK_URL: ${{ secrets.AUTO_REVIEW_WEBHOOK_URL }}
           NOTIFY_WEBHOOK_TOKEN: ${{ secrets.AUTO_REVIEW_WEBHOOK_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set +e
           # 汇总 updated / failed 数组（update step 未执行时为默认空数组）
@@ -175,7 +181,7 @@ jobs:
           fi
           # 把 PyPI 查询失败的插件也并入 failed 数组
           if [ -f failures.json ]; then
-            PYPI_QUERY_FAILED=$(jq -c '[.[] | {pypi, current: .current_version, latest: "?"}]' failures.json)
+            PYPI_QUERY_FAILED=$(jq -c '[.[] | {pypi, current: .current_version, latest: "?", reason: "PyPI 查询失败"}]' failures.json)
             FAILED_JSON=$(jq -nc --argjson a "$FAILED_JSON" --argjson b "$PYPI_QUERY_FAILED" '$a + $b')
           fi
           # 无任何更新与失败时不推送，避免每日空消息
@@ -189,7 +195,8 @@ jobs:
           NOTIFY_JSON=$(jq -nc \
             --arg ev "plugin_version_check" \
             --arg src "plugin-store" \
+            --arg run "$RUN_URL" \
             --argjson up "$UPDATED_JSON" \
             --argjson fd "$FAILED_JSON" \
-            '{event:$ev, source:$src, updated:$up, failed:$fd}')
+            '{event:$ev, source:$src, updated:$up, failed:$fd, run:($run|if length>0 then . else null end)}')
           NOTIFY_JSON="$NOTIFY_JSON" python3 .github/scripts/notify_webhook.py

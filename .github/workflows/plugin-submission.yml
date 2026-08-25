@@ -363,6 +363,7 @@ jobs:
           REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ steps.issue.outputs.number }}
           AUTHOR: ${{ steps.form.outputs.author }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set +e
           OK_FLAG="${VERIFY_OK:-false}"
@@ -376,6 +377,11 @@ jobs:
             EVENT="plugin_review_required"
             DETAIL="自动验证失败，需要人工审批"
           fi
+          # 验证失败时附带运行错误日志摘要（取 error.log 末尾，字符级截断避免切坏 UTF-8）
+          LOG_EXCERPT=""
+          if [ "$OK_FLAG" != "true" ] && [ -s logs/error.log ]; then
+            LOG_EXCERPT=$(python3 -c "import sys;print(sys.stdin.read()[-1200:].strip())" < logs/error.log)
+          fi
           NOTIFY_JSON=$(jq -nc \
             --arg ev "$EVENT" \
             --arg dt "$DETAIL" \
@@ -383,5 +389,7 @@ jobs:
             --arg nm "$NAME" \
             --arg au "${AUTHOR:-}" \
             --arg url "$ISSUE_URL" \
-            '{event:$ev,source:"plugin-store",detail:$dt,plugin:{name:$nm,pypi:$py,author:$au},issue:$url}')
+            --arg run "$RUN_URL" \
+            --arg lg "$LOG_EXCERPT" \
+            '{event:$ev,source:"plugin-store",detail:$dt,plugin:{name:$nm,pypi:$py,author:$au},issue:$url,run:($run|if length>0 then . else null end),log:($lg|if length>0 then . else null end)}')
           NOTIFY_JSON="$NOTIFY_JSON" python3 .github/scripts/notify_webhook.py
