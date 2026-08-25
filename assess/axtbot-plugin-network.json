@@ -1,0 +1,16 @@
+{
+  "name": "网络信息查询",
+  "version": "1.0.0",
+  "author": "AxT-Team",
+  "description": "该插件为官方插件包之一，用于获取网络信息、IP信息、域名Whois等",
+  "pypi": "axtbot-plugin-network",
+  "pypi_url": "https://pypi.org/project/axtbot-plugin-network/",
+  "official": true,
+  "category": "网络",
+  "tags": [
+    "网络"
+  ],
+  "homepage": "https://github.com/AxT-Team/axtbot-plugin-network",
+  "repo": "https://github.com/AxT-Team/axtbot-plugin-network",
+  "updated_at": "2026-08-25T14:26:42Z"
+}
