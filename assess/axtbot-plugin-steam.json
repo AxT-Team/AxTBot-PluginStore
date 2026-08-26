@@ -1,0 +1,16 @@
+{
+  "name": "Steam信息查询",
+  "version": "1.0.0",
+  "author": "AxT-Team",
+  "description": "该插件为官方插件包之一，通过 '/steam' 查询Steam用户数据",
+  "pypi": "axtbot-plugin-steam",
+  "pypi_url": "https://pypi.org/project/axtbot-plugin-steam/",
+  "official": true,
+  "category": "工具",
+  "tags": [
+    "Steam"
+  ],
+  "homepage": "https://github.com/AxT-Team/axtbot-plugin-steam",
+  "repo": "https://github.com/AxT-Team/axtbot-plugin-steam",
+  "updated_at": "2026-08-26T14:59:17Z"
+}

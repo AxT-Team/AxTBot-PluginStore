@@ -1,6 +1,6 @@
 {
-  "count": 8,
-  "updated_at": "2026-08-26T03:09:16Z",
+  "count": 9,
+  "updated_at": "2026-08-26T14:59:17Z",
   "categories": [
     "工具",
     "娱乐",
@@ -35,6 +35,9 @@
     },
     {
       "file": "axtbot-plugin-network.json"
+    },
+    {
+      "file": "axtbot-plugin-steam.json"
     }
   ]
 }
