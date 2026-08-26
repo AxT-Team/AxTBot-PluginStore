@@ -1,6 +1,6 @@
 {
   "name": "插件商店通知",
-  "version": "1.0.2",
+  "version": "1.2.0",
   "author": "Shanshui2024",
   "description": "【AI插件】该插件接收插件商店 Webhook，推送审核消息到指定 QQ 群，支持按钮审批",
   "pypi": "axtbot-plugin-store-notify",
@@ -13,5 +13,5 @@
   ],
   "homepage": "https://github.com/Shanshui2024/axtbot-plugin-store-notify",
   "repo": "https://github.com/Shanshui2024/axtbot-plugin-store-notify",
-  "updated_at": "2026-08-15T12:09:02Z"
+  "updated_at": "2026-08-26T03:09:16Z"
 }
