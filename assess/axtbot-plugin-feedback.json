@@ -1,0 +1,16 @@
+{
+  "name": "报错反馈",
+  "version": "1.0.0",
+  "author": "AxT-Team",
+  "description": "该插件为官方插件包之一，通过hook相关按钮回调实现报错反馈",
+  "pypi": "axtbot-plugin-feedback",
+  "pypi_url": "https://pypi.org/project/axtbot-plugin-feedback/",
+  "official": true,
+  "category": "工具",
+  "tags": [
+    "反馈"
+  ],
+  "homepage": "https://github.com/AxT-Team/axtbot-plugin-feedback",
+  "repo": "https://github.com/AxT-Team/axtbot-plugin-feedback",
+  "updated_at": "2026-08-26T14:59:55Z"
+}
