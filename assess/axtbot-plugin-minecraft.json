@@ -1,0 +1,16 @@
+{
+  "name": "MC查询器",
+  "version": "1.0.0",
+  "author": "AxT-Team",
+  "description": "该插件为官方插件包之一，通过Uapis提供多种服务",
+  "pypi": "axtbot-plugin-minecraft",
+  "pypi_url": "https://pypi.org/project/axtbot-plugin-minecraft/",
+  "official": true,
+  "category": "工具",
+  "tags": [
+    "Minecraft"
+  ],
+  "homepage": "https://github.com/AxT-Team/axtbot-plugin-minecraft",
+  "repo": "https://github.com/AxT-Team/axtbot-plugin-minecraft",
+  "updated_at": "2026-08-30T12:16:40Z"
+}
