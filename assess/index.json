@@ -1,6 +1,6 @@
 {
-  "count": 12,
-  "updated_at": "2026-08-30T12:16:40Z",
+  "count": 13,
+  "updated_at": "2026-08-30T12:56:05Z",
   "categories": [
     "工具",
     "娱乐",
@@ -47,6 +47,9 @@
     },
     {
       "file": "axtbot-plugin-minecraft.json"
+    },
+    {
+      "file": "axtbot-plugin-remake.json"
     }
   ]
 }
