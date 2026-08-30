@@ -46,6 +46,12 @@ jobs:
           REPO: ${{ github.repository }}
           LOGIN: ${{ github.event.comment.user.login }}
         run: |
+          # GitHub App 机器人（<slug>[bot]）通过 installation 获得权限，不在 collaborator 列表，
+          # 直接视为已授权，跳过 collaborator 权限检查。
+          if [[ "$LOGIN" == *"[bot]" ]]; then
+            echo "authorized=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           PERM=$(gh api "/repos/${REPO}/collaborators/${LOGIN}/permission" --jq '.permission' 2>/dev/null || echo "none")
           echo "permission=$PERM"
           case "$PERM" in
