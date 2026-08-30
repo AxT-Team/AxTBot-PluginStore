@@ -1,0 +1,17 @@
+{
+  "name": "表情包生成器",
+  "version": "1.0.0",
+  "author": "AxT-Team",
+  "description": "该插件为官方插件包之一，可通过'/meme'生成表情包！",
+  "pypi": "axtbot-plugin-meme",
+  "pypi_url": "https://pypi.org/project/axtbot-plugin-meme/",
+  "official": true,
+  "category": "娱乐",
+  "tags": [
+    "表情",
+    "摸"
+  ],
+  "homepage": "https://github.com/AxT-Team/axtbot-plugin-meme",
+  "repo": "https://github.com/AxT-Team/axtbot-plugin-meme",
+  "updated_at": "2026-08-30T12:16:25Z"
+}
